@@ -3,4 +3,7 @@
   <ItemGroup>
     <ClCompile Include="sakuramochi.cpp" />
   </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="sakuramochi.h" />
+  </ItemGroup>
 </Project>

@@ -1,36 +1,98 @@
-#define WIN32_LEAN_AND_MEAN
-#include <windows.h>
-#include <wtsapi32.h>
+#include "sakuramochi.h"
+
+void put_gmtime(wchar_t(&dest)[21], std::time_t src)
+{
+	tm buff{};
+
+	if (auto err = gmtime_s(&buff, &src); err != 0)
+	{
+		throw std::system_error(err, std::generic_category(), __FILE__ "(" _CRT_STRINGIZE(__LINE__) ")");
+	}
+
+	std::wcsftime(dest, _countof(dest), L"%Y-%m-%dT%H:%M:%SZ", &buff);
+
+	::OutputDebugString(dest);
+	::OutputDebugString(L"\r\n");
+}
+
+namespace reg
+{
+	void CreateValue(HKEY key, const wchar_t * name, const wchar_t * value)
+	{
+		auto size = std::wcslen(value) * sizeof(wchar_t);
+
+		if (auto status = ::RegSetValueEx(key, name, 0, REG_SZ, (const BYTE *) value, (DWORD) size))
+		{
+			throw std::system_error(status, std::system_category(), __FILE__ "(" _CRT_STRINGIZE(__LINE__) ")");
+		}
+	}
+
+	void DeleteValue(HKEY key, const wchar_t * name)
+	{
+		if (auto status = ::RegDeleteValue(key, name))
+		{
+			if (status != ERROR_FILE_NOT_FOUND)
+				throw std::system_error(status, std::system_category(), __FILE__ "(" _CRT_STRINGIZE(__LINE__) ")");
+		}
+	}
+}
+
+void PauseWindowsUpdate(bool pause)
+{
+	win32::Transaction tx;
+	win32::RegistryKey key;
+
+	if (auto status = ::RegOpenKeyTransacted(HKEY_LOCAL_MACHINE, L"SOFTWARE\\Microsoft\\WindowsUpdate\\UX\\Settings", 0, KEY_WRITE, key, tx, nullptr))
+	{
+		throw std::system_error(status, std::system_category(), __FILE__ "(" _CRT_STRINGIZE(__LINE__) ")");
+	}
+
+	if (pause)
+	{
+		auto now = std::chrono::system_clock::now();
+		auto end = now + std::chrono::hours(24 * 14);
+
+		wchar_t startTime[21]{};
+		wchar_t endTime[21]{};
+
+		put_gmtime(startTime, std::chrono::system_clock::to_time_t(now));
+		put_gmtime(endTime, std::chrono::system_clock::to_time_t(end));
+
+		reg::CreateValue(key, L"PauseFeatureUpdatesStartTime", startTime);
+		reg::CreateValue(key, L"PauseFeatureUpdatesEndTime", endTime);
+		reg::CreateValue(key, L"PauseQualityUpdatesStartTime", startTime);
+		reg::CreateValue(key, L"PauseQualityUpdatesEndTime", endTime);
+		reg::CreateValue(key, L"PauseUpdatesStartTime", startTime);
+		reg::CreateValue(key, L"PauseUpdatesExpiryTime", endTime);
+	}
+	else
+	{
+		reg::DeleteValue(key, L"PauseFeatureUpdatesStartTime");
+		reg::DeleteValue(key, L"PauseFeatureUpdatesEndTime");
+		reg::DeleteValue(key, L"PauseQualityUpdatesStartTime");
+		reg::DeleteValue(key, L"PauseQualityUpdatesEndTime");
+		reg::DeleteValue(key, L"PauseUpdatesStartTime");
+		reg::DeleteValue(key, L"PauseUpdatesExpiryTime");
+	}
+}
 
 int WINAPI wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _In_ LPWSTR lpCmdLine, _In_ int nShowCmd)
 {
-	// https://docs.microsoft.com/en-us/windows/win32/api/wtsapi32/nf-wtsapi32-wtsquerysessioninformationa#remarks
-
-	void * pBuffer{};
-	DWORD nBytes{};
-
-	if (::WTSQuerySessionInformation(WTS_CURRENT_SERVER_HANDLE, WTS_CURRENT_SESSION, WTSClientProtocolType, (LPWSTR *) &pBuffer, &nBytes))
+	try
 	{
-		if (nBytes == sizeof(USHORT))
-		{
-			switch (*(USHORT *) pBuffer)
-			{
-			case 0:
-				::OutputDebugString(TEXT("The console session.\r\n"));
-				break;
-			case 1:
-				::OutputDebugString(TEXT("This value is retained for legacy purposes.\r\n"));
-				break;
-			case 2:
-				::OutputDebugString(TEXT("The RDP protocol.\r\n"));
-				break;
-			}
-		}
-
-		::WTSFreeMemory(pBuffer);
-
+		PauseWindowsUpdate(!wts::IsConsoleSession());
 		return 0;
 	}
+	catch (const std::exception & e)
+	{
+		if (::IsDebuggerPresent())
+		{
+			::OutputDebugStringA(e.what());
+			::OutputDebugStringA("\r\n");
+		}
+		else
+			::MessageBoxA(nullptr, e.what(), "sakuramochi", MB_ICONHAND | MB_OK);
 
-	return 1;
+		return 1;
+	}
 }
