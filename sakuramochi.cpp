@@ -10,13 +10,18 @@ void put_gmtime(wchar_t(&dest)[21], std::time_t src)
 	}
 
 	std::wcsftime(dest, _countof(dest), L"%Y-%m-%dT%H:%M:%SZ", &buff);
-
-	::OutputDebugString(dest);
-	::OutputDebugString(L"\r\n");
 }
 
 namespace reg
 {
+	void OpenKey(HKEY root, const wchar_t * subkey, HANDLE hTransaction, PHKEY result)
+	{
+		if (auto status = ::RegOpenKeyTransacted(root, subkey, 0, KEY_WRITE, result, hTransaction, nullptr))
+		{
+			throw std::system_error(status, std::system_category(), __FILE__ "(" _CRT_STRINGIZE(__LINE__) ")");
+		}
+	}
+
 	void CreateValue(HKEY key, const wchar_t * name, const wchar_t * value)
 	{
 		auto size = std::wcslen(value) * sizeof(wchar_t);
@@ -42,10 +47,7 @@ void PauseWindowsUpdate(bool pause)
 	win32::Transaction tx;
 	win32::RegistryKey key;
 
-	if (auto status = ::RegOpenKeyTransacted(HKEY_LOCAL_MACHINE, L"SOFTWARE\\Microsoft\\WindowsUpdate\\UX\\Settings", 0, KEY_WRITE, key, tx, nullptr))
-	{
-		throw std::system_error(status, std::system_category(), __FILE__ "(" _CRT_STRINGIZE(__LINE__) ")");
-	}
+	reg::OpenKey(HKEY_LOCAL_MACHINE, L"SOFTWARE\\Microsoft\\WindowsUpdate\\UX\\Settings", tx, key);
 
 	if (pause)
 	{
