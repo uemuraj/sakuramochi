@@ -80,6 +80,11 @@ void PauseWindowsUpdate(bool pause)
 
 int WINAPI wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _In_ LPWSTR lpCmdLine, _In_ int nShowCmd)
 {
+	// TODO: ログアウトまで待機する
+	//
+	// * コンソールセッションの場合、ログインしたら解除して、ログアウトしたら延期。
+	// * リモートセッションの場合、ログインしたら延期して、ログアウトしても延期。（）
+	//
 	try
 	{
 		PauseWindowsUpdate(!wts::IsConsoleSession());
