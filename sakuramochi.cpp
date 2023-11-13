@@ -6,48 +6,18 @@ void put_gmtime(wchar_t(&dest)[21], std::time_t src)
 
 	if (auto err = gmtime_s(&buff, &src); err != 0)
 	{
-		throw std::system_error(err, std::generic_category(), __FILE__ "(" _CRT_STRINGIZE(__LINE__) ")");
+		throw std::system_error(err, std::generic_category(), MACRO_SOURCE_LOCATION());
 	}
 
 	std::wcsftime(dest, _countof(dest), L"%Y-%m-%dT%H:%M:%SZ", &buff);
 }
 
-namespace reg
-{
-	void OpenKey(HKEY root, const wchar_t * subkey, HANDLE hTransaction, PHKEY result)
-	{
-		if (auto status = ::RegOpenKeyTransacted(root, subkey, 0, KEY_WRITE, result, hTransaction, nullptr))
-		{
-			throw std::system_error(status, std::system_category(), __FILE__ "(" _CRT_STRINGIZE(__LINE__) ")");
-		}
-	}
-
-	void CreateValue(HKEY key, const wchar_t * name, const wchar_t * value)
-	{
-		auto size = std::wcslen(value) * sizeof(wchar_t);
-
-		if (auto status = ::RegSetValueEx(key, name, 0, REG_SZ, (const BYTE *) value, (DWORD) size))
-		{
-			throw std::system_error(status, std::system_category(), __FILE__ "(" _CRT_STRINGIZE(__LINE__) ")");
-		}
-	}
-
-	void DeleteValue(HKEY key, const wchar_t * name)
-	{
-		if (auto status = ::RegDeleteValue(key, name))
-		{
-			if (status != ERROR_FILE_NOT_FOUND)
-				throw std::system_error(status, std::system_category(), __FILE__ "(" _CRT_STRINGIZE(__LINE__) ")");
-		}
-	}
-}
-
 void PauseWindowsUpdate(bool pause)
 {
-	win32::Transaction tx;
+	win32::Transaction txn;
 	win32::RegistryKey key;
 
-	reg::OpenKey(HKEY_LOCAL_MACHINE, L"SOFTWARE\\Microsoft\\WindowsUpdate\\UX\\Settings", tx, key);
+	reg::OpenKey(HKEY_LOCAL_MACHINE, L"SOFTWARE\\Microsoft\\WindowsUpdate\\UX\\Settings", txn, key);
 
 	if (pause)
 	{
@@ -83,7 +53,7 @@ int WINAPI wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, 
 	// TODO: ログアウトまで待機する
 	//
 	// * コンソールセッションの場合、ログインしたら解除して、ログアウトしたら延期。
-	// * リモートセッションの場合、ログインしたら延期して、ログアウトしても延期。（）
+	// * リモートセッションの場合、ログインしたら延期して、ログアウトしても延期。
 	//
 	try
 	{
@@ -98,8 +68,9 @@ int WINAPI wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, 
 			::OutputDebugStringA("\r\n");
 		}
 		else
-			::MessageBoxA(nullptr, e.what(), "sakuramochi", MB_ICONHAND | MB_OK);
-
+		{
+			::MessageBoxA(nullptr, e.what(), VS_TARGETNAME, MB_ICONHAND | MB_OK);
+		}
 		return 1;
 	}
 }
